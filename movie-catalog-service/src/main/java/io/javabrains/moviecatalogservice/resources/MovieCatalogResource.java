@@ -1,21 +1,20 @@
 package io.javabrains.moviecatalogservice.resources;
 
 import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixProperty;
 import io.javabrains.moviecatalogservice.models.CatalogItem;
 import io.javabrains.moviecatalogservice.models.Movie;
-import io.javabrains.moviecatalogservice.models.Rating;
 import io.javabrains.moviecatalogservice.models.UserRating;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.env.Environment;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.lang.reflect.ParameterizedType;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,6 +32,8 @@ public class MovieCatalogResource {
     //@Autowired
     //private DiscoveryClient discoveryClient;
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MovieCatalogResource.class);
+
     @RequestMapping("/")
     public String home() {
         // This is useful for debugging
@@ -43,11 +44,12 @@ public class MovieCatalogResource {
 
     @RequestMapping("/{userId}")
     @PreAuthorize("hasPermission('MovieCatalogResource','UPDATE')")
+    @HystrixCommand(fallbackMethod = "fallback")
     public List<CatalogItem> getCatalog(@PathVariable("userId") String userId) {
-
+        LOGGER.info("Creando listado de valoraciones....");
         UserRating ratings = restTemplate
-                .getForObject("http://ratings-data-service/ratingsdata/users/" +  userId, UserRating.class);
-
+                .getForObject("http://ratings-data-service/ratingsdata/users/" + userId, UserRating.class);
+        LOGGER.info("Devolviendo catáloo de películas...");
         return ratings
                 .getUserRating()
                 .stream()
@@ -65,5 +67,10 @@ public class MovieCatalogResource {
                 })
                 .collect(Collectors.toList());
 
+    }
+
+    // a fallback method to be called if failure happened
+    public List<CatalogItem> fallback(@PathVariable("userId") String userId) {
+        return Arrays.asList(new CatalogItem("No Catalog", "", 0));
     }
 }
